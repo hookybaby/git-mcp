@@ -16,7 +16,36 @@ export default function Content({
 }) {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
 
+  let documentationServerPrefix = "GitMCP";
+  let docsText = owner === "docs" ? "all GitHub docs" : `${owner}/${repo} docs`;
+  let serverName = generateServerName(repo);
+
+  if (owner == "cloudflare" && repo == "docs") {
+    url = "https://docs.mcp.cloudflare.com/sse";
+    documentationServerPrefix = "MCP";
+    docsText = "Cloudflare docs";
+    serverName = "Cloudflare Docs";
+  }
+
   const description: React.ReactNode = (() => {
+    if (owner == "cloudflare" && repo == "docs") {
+      return (
+        <div>
+          <span> for</span>{" "}
+          <strong className="text-blue-500">
+            <a
+              href={`https://developers.cloudflare.com/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:underline"
+            >
+              Cloudflare Documentation
+            </a>
+          </strong>{" "}
+        </div>
+      );
+    }
+
     if (urlType === "subdomain") {
       return (
         <div>
@@ -54,8 +83,6 @@ export default function Content({
     }
     return <div>Documentation MCP</div>;
   })();
-
-  const serverName = generateServerName(repo);
 
   const [copied, setCopied] = useState(false);
 
@@ -108,7 +135,7 @@ export default function Content({
               target="_blank"
               rel="noopener noreferrer"
             >
-              GitMCP Documentation Server
+              {documentationServerPrefix} Documentation Server
             </a>
           </h1>
           <div className="mt-4 text-lg sm:text-xl text-slate-700">
@@ -163,11 +190,7 @@ export default function Content({
                   />
                 </svg>
                 <span className="hidden sm:inline">
-                  New! Chat with{" "}
-                  {owner === "docs"
-                    ? "all GitHub docs"
-                    : `${owner}/${repo} docs`}{" "}
-                  online!
+                  New! Chat with {docsText} online!
                 </span>
                 <span className="sm:hidden">Chat with docs</span>
               </button>
@@ -202,7 +225,7 @@ export default function Content({
 
         <div className="bg-white shadow-lg rounded-lg p-4 sm:p-6 my-8 border border-slate-200">
           <h2 className="text-lg sm:text-xl font-semibold text-blue-800 mb-4">
-            Integration Examples
+            Connect your AI assistant
           </h2>
 
           {/* Tabs for different integrations */}
