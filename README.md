@@ -1,12 +1,15 @@
 # GitMCP
 
-<img width="1092" alt="image" src="https://github.com/user-attachments/assets/087883c3-99e9-4c47-af49-07d02769bddd" />
+<p align="center">
+  <img width="884" alt="image" src="https://github.com/user-attachments/assets/2bf3e3df-556c-49c6-ab7b-36c279d53bba" />
+</p>
 
 <p align="center">
   <a href="#-what-is-gitmcp">What is GitMCP</a> •
   <a href="#-features">Features</a> •
   <a href="#-getting-started">Getting Started</a> •
   <a href="#-how-it-works">How It Works</a> •
+  <a href="#-badge">Badge</a> •
   <a href="#-examples">Examples</a> •
   <a href="#-faq">FAQ</a> •
   <a href="#-privacy">Privacy</a> •
@@ -15,6 +18,7 @@
 </p>
 <div align="center">
 
+[![GitMCP](https://img.shields.io/endpoint?url=https://gitmcp.io/badge/idosal/git-mcp)](https://gitmcp.io/idosal/git-mcp)
 [![Twitter Follow](https://img.shields.io/twitter/follow/idosal1?style=social)](https://twitter.com/idosal1)
 [![Twitter Follow](https://img.shields.io/twitter/follow/liadyosef?style=social)](https://twitter.com/liadyosef)
 </div>
@@ -22,7 +26,6 @@
 <div align="center">
   <a href="https://www.pulsemcp.com/servers/idosal-git-mcp"><img src="https://www.pulsemcp.com/badge/top-pick/idosal-git-mcp" width="400" alt="Pulse MCP Badge"></a>
 </div>
-
 
 ## 🤔 What is GitMCP?
 **Stop vibe-hallucinating and start vibe-coding!**
@@ -50,6 +53,7 @@ https://github.com/user-attachments/assets/fbf1b4a7-f9f0-4c0e-831c-4d64faae2c45
 - 😎 **Latest Documentation on ANY GitHub Project**: Grant your AI assistant seamless access to the GitHub project's documentation and code. The built-in smart search capabilities help find exactly what the AI needs without using too many tokens!
 - 🧠 **No More Hallucinations**: With GitMCP, your AI assistant can provide accurate and relevant answers to your questions.
 - ☁️ **Zero Setup**: GitMCP runs in the cloud. Simply add the chosen GitMCP URL as an MCP server in your IDE — no downloads, installations, signups, or changes are required.
+- 💬 **Embedded Chat**: Start quickly by chatting directly with the repository's documentation through our in-browser chat!
 - ✅ **Open, Free, and Private**: GitMCP is open-source and completely free to use. It doesn't collect personal information or store queries. You can even self-host it!
 
 <video src="https://github.com/user-attachments/assets/2c3afaf9-6c08-436e-9efd-db8710554430"></video>
@@ -62,7 +66,7 @@ Using GitMCP is easy! Simply follow these steps:
 
 Choose one of these URL formats depending on what you want to connect to:
 
-- For GitHub repositories: `gitmcp.io/{owner}/{repo}` 
+- For GitHub repositories: `gitmcp.io/{owner}/{repo}`
 - For GitHub Pages sites: `{owner}.gitmcp.io/{repo}`
 - For a generic tool that supports any repository (dynamic): `gitmcp.io/docs`
 
@@ -159,9 +163,39 @@ SSE URL: `https://gitmcp.io/{owner}/{repo}`
 
 For more details on adding custom MCP servers to HighlightAI, refer to [the documentation](https://docs.highlightai.com/learn/developers/plugins/custom-plugins-setup).
 
+#### Connecting Augment Code
+
+1. Open Augment Code settings
+2. Navigate to the MCP section
+3. Add a new MCP server with the following details:
+
+Name the MCP server: `git-mcp Docs`
+
+Use this command:
+```bash
+npx mcp-remote https://gitmcp.io/{owner}/{repo}
+```
+
+Or use the following configuration:
+```json
+{
+  "mcpServers": {
+    "git-mcp Docs": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://gitmcp.io/{owner}/{repo}"
+      ]
+    }
+  }
+}
+```
+
+For more details on configuring MCP servers in Augment Code, visit [the Augment Code documentation](https://docs.augmentcode.com/setup-augment/mcp).
+
 > **Note:** Remember to replace `{owner}` and `{repo}` with the actual GitHub username/organization and repository name. You can also use the dynamic endpoint `https://gitmcp.io/docs` to allow your AI to access any repository on demand.
 
-## ⚙️ How It Works
+## ⚙ How It Works
 
 GitMCP connects your AI assistant to GitHub repositories using the Model Context Protocol (MCP), a standard that lets AI tools request additional information from external sources.
 
@@ -223,7 +257,7 @@ This tool gets the primary documentation from a GitHub repository. It works by r
 
 ### `search_<repo-name>_documentation`
 
-This tool lets the AI search through a repository's documentation by providing a specific search query. Instead of loading all documentation (which could be very large), it uses smart search to find just the relevant parts.
+This tool lets the AI search through a repository's documentation by providing a specific search query. Instead of loading all the documentation (which could be very large), it uses intelligent search to find just the relevant parts.
 
 **When it's useful:** For specific questions about particular features, functions, or concepts within a project
 
@@ -240,6 +274,37 @@ This tool searches through the actual code in the repository using GitHub's code
 **When it's useful:** When you want examples of how something is implemented or need technical details not covered in documentation
 
 > **Note:** When using the dynamic endpoint (`gitmcp.io/docs`), these tools are named slightly differently (`fetch_generic_documentation`, `search_generic_code`, and `search_generic_documentation`) and need additional information about which repository to access.
+
+## 📊 Badge
+
+GitMCP has a badge to your repository's README. It allows users to quickly access your documentation through their IDE or browser (using the embedded chat). It also showcases how many times your documentation has been accessed through GitMCP.
+
+Example (`idosal/git-mcp`): [![GitMCP](https://img.shields.io/endpoint?url=https://gitmcp.io/badge/idosal/git-mcp)](https://gitmcp.io/idosal/git-mcp)
+
+### Adding the Badge to Your Repository
+
+Add the following to your `README.md`:
+
+```markdown
+[![GitMCP](https://img.shields.io/endpoint?url=https://gitmcp.io/badge/OWNER/REPO)](https://gitmcp.io/OWNER/REPO)
+```
+
+Replace `OWNER` with your GitHub username or organization, and `REPO` with your repository name.
+
+### How We Count Views
+
+Increment for each tool call on the specific repository.
+
+### Customizing the Badge
+
+You can customize the badge's appearance with parameters:
+
+| Parameter | Description | Default | Example |
+|-----------|-------------|---------|---------|
+| `color` | Color for the badge value | `aquamarine` | `?color=green` |
+| `label` | Badge label | `GitMCP` | `Documentation`
+
+Please reach out!
 
 ## ❓ FAQ
 
