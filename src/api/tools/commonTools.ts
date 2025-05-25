@@ -5,13 +5,7 @@ import {
   getRepoBranch,
   searchGitHubRepo,
 } from "../utils/github.js";
-import { formatSearchResults } from "../utils/helpers.js";
 import { fetchFileWithRobotsTxtCheck } from "../utils/robotsTxt.js";
-import {
-  searchDocumentation,
-  storeDocumentationVectors,
-} from "../utils/vectorStore.js";
-import { cacheIsIndexed, getIsIndexedFromCache } from "../utils/cache.js";
 import htmlToMd from "html-to-md";
 import { searchCode } from "../utils/githubClient.js";
 import { fetchFileFromR2 } from "../utils/r2.js";
@@ -38,7 +32,7 @@ export async function fetchDocumentation({
   ctx: any;
 }): Promise<FetchDocumentationResult> {
   const { owner, repo, urlType } = repoData;
-  const cacheTTL = 15 * 60; // 15 minutes in seconds
+  const cacheTTL = 30 * 60; // 30 minutes in seconds
 
   // Try fetching from cache first
   if (owner && repo) {
@@ -47,7 +41,6 @@ export async function fetchDocumentation({
       console.log(
         `Returning cached fetchDocumentation result for ${owner}/${repo}`,
       );
-      // Optional: Extend cache TTL if needed, or just return
       return cachedResult;
     }
   }
@@ -205,74 +198,81 @@ export async function fetchDocumentation({
         console.log(`Fetched pre-generated llms.txt for ${owner}/${repo}`);
         fileUsed = "llms.txt (generated)";
       } else {
-        console.log(`No pre-generated llms.txt found for ${owner}/${repo}`);
+        console.error(`No pre-generated llms.txt found for ${owner}/${repo}`);
       }
     }
 
-    // Fallback to README.md if llms.txt not found in any location (GitHub or R2)
+    // Fallback to README if llms.txt not found in any location (GitHub or R2)
     if (!content) {
-      console.log(`llms.txt not found, trying README.md`);
-      // Use static approach for README
-      const readmeLocation = getReadmeMDLocationByRepoData(repoData);
+      console.log(
+        `llms.txt not found, trying README.* at root`,
+        owner,
+        repo,
+        docsBranch,
+      );
       // Ensure docsBranch is available (should be fetched above)
       if (!docsBranch) {
         docsBranch = await getRepoBranch(owner, repo, env);
       }
 
-      // Try README.md (uppercase) first
-      content = await fetchFileFromGitHub(
+      // Search for README.* files in the root directory
+      const readmeResult = await searchGitHubRepo(
         owner,
         repo,
-        docsBranch,
-        readmeLocation,
+        "README+path:/", // Search for files like README.* in root
+        docsBranch, // Use the determined branch
         env,
-        false,
+        ctx,
       );
 
-      if (content) {
-        fileUsed = "README.md";
-        docsPath = constructGithubUrl(owner, repo, docsBranch, "README.md");
-      } else {
-        // If uppercase README.md not found, try lowercase readme.md
-        console.log(`README.md not found, trying readme.md`);
-        content = await fetchFileFromGitHub(
+      if (readmeResult) {
+        content = readmeResult.content;
+        // Extract filename from the path for clarity, default to full path if extraction fails
+        const filename =
+          readmeResult.path.split("/").pop() || readmeResult.path;
+        fileUsed = filename; // e.g., "README.md", "README.asciidoc"
+        docsPath = constructGithubUrl(
           owner,
           repo,
           docsBranch,
-          "readme.md",
-          env,
-          false,
-        );
-
-        if (content) {
-          fileUsed = "readme.md";
-          docsPath = constructGithubUrl(owner, repo, docsBranch, "readme.md");
-        }
+          readmeResult.path,
+        ); // Use the full path found
+        console.log(`Found README file via search: ${fileUsed}`);
+      } else {
+        console.log(`No README file found at root for ${owner}/${repo}`);
       }
     }
 
     if (!content) {
       console.error(`Failed to find documentation for ${owner}/${repo}`);
     }
+  }
 
-    if (content && owner && repo) {
-      ctx.waitUntil(
-        indexDocumentation(
-          owner,
-          repo,
-          content,
-          fileUsed,
-          docsPath,
-          docsBranch,
-          env,
-        ),
-      );
-    }
+  if (owner && repo) {
+    ctx.waitUntil(
+      enqueueDocumentationProcessing(
+        owner,
+        repo,
+        content,
+        fileUsed,
+        docsPath,
+        docsBranch,
+        env,
+      ),
+    );
   }
 
   if (!content) {
     content = "No documentation found.";
-    fileUsed = "generated";
+    return {
+      fileUsed,
+      content: [
+        {
+          type: "text" as const,
+          text: content,
+        },
+      ],
+    };
   }
 
   const result: FetchDocumentationResult = {
@@ -285,7 +285,6 @@ export async function fetchDocumentation({
     ],
   };
 
-  // Cache the final result before returning
   if (owner && repo) {
     ctx.waitUntil(
       cacheFetchDocResult(owner, repo, result, cacheTTL, env).catch((error) => {
@@ -297,10 +296,10 @@ export async function fetchDocumentation({
   return result;
 }
 
-async function indexDocumentation(
+async function enqueueDocumentationProcessing(
   owner: string,
   repo: string,
-  content: string,
+  content: string | null,
   fileUsed: string,
   docsPath: string,
   docsBranch: string,
@@ -308,7 +307,7 @@ async function indexDocumentation(
 ) {
   try {
     if (env.MY_QUEUE) {
-      // Construct repo URL and llms URL if applicable
+      console.log("Enqueuing documentation processing", owner, repo);
       const repoUrl = `https://github.com/${owner}/${repo}`;
 
       // Prepare and send message to queue
@@ -317,7 +316,7 @@ async function indexDocumentation(
         repo,
         repo_url: repoUrl,
         file_url: docsPath,
-        content_length: content.length,
+        content_length: content?.length,
         file_used: fileUsed,
         docs_branch: docsBranch,
       };
@@ -331,38 +330,10 @@ async function indexDocumentation(
       console.error("Queue 'MY_QUEUE' not available in environment");
     }
   } catch (error) {
-    console.warn(
+    console.error(
       `Failed to enqueue documentation request for ${owner}/${repo}`,
       error,
     );
-  }
-
-  try {
-    // First check if vectors exist in KV cache
-    let vectorsExist = await getIsIndexedFromCache(owner, repo, env);
-
-    // Only store vectors if they don't exist yet
-    if (!vectorsExist) {
-      // Pass the Vectorize binding from env
-      await storeDocumentationVectors(
-        owner,
-        repo,
-        content,
-        fileUsed,
-        env.VECTORIZE,
-      );
-
-      // Update the cache to indicate vectors now exist
-      await cacheIsIndexed(owner, repo, true, env);
-      console.log(`Stored documentation vectors for ${owner}/${repo}`);
-    } else {
-      console.log(
-        `Documentation vectors already exist for ${owner}/${repo}, skipping indexing`,
-      );
-    }
-  } catch (error) {
-    console.error(`Failed to store documentation vectors: ${error}`);
-    // Continue despite vector storage failure
   }
 }
 
@@ -398,17 +369,19 @@ export async function searchRepositoryDocumentation({
         autoragPipeline: "docs-rag",
       });
       if (
-        autoragResult?.content[0]?.text?.includes("No results found") === false
+        autoragResult?.content[0]?.text?.startsWith("No results found") ===
+        false
       ) {
         console.log("Found results in AutoRAG", autoragResult);
         return autoragResult;
       }
+
+      console.log("No results in AutoRAG", autoragResult);
     } catch (error) {
       console.error("Error in AutoRAG search", error);
     }
   }
 
-  console.log("No results in AutoRAG, falling back to naive search");
   return await fallbackSearch({
     repoData,
     query,
@@ -440,79 +413,30 @@ export async function searchRepositoryDocumentationAutoRag({
     };
   }
 
-  // List all subdirectories recursively in R2 to build filter
-  const r2Prefix = `${repoData.owner}/${repoData.repo}/`;
-  let foldersToSearch: string[] = [];
-
-  try {
-    console.log(`Recursively listing folders in R2 with prefix: ${r2Prefix}`);
-    // Fetch all subfolders recursively
-    const subfolders = await listAllSubfolders(env.DOCS_BUCKET, r2Prefix);
-    // Combine root prefix with all found subfolders, ensuring uniqueness
-    foldersToSearch = [...new Set([r2Prefix, ...subfolders])];
-    if (foldersToSearch.length > 48) {
-      console.warn(`Found ${foldersToSearch.length} folders, limiting to 48`);
-      foldersToSearch = foldersToSearch.slice(0, 48);
-    }
-
-    console.log(
-      `Found ${foldersToSearch.length} total folders (incl. root & subfolders) for AutoRAG search:`,
-      foldersToSearch,
-    );
-  } catch (error) {
-    console.error(
-      `Error listing R2 folders recursively for ${r2Prefix}, falling back to gte filter: ${error}`,
-    );
-  }
-
-  // Define the base search request structure (without filters initially)
+  const repoPrefix = `${repoData.owner}/${repoData.repo}/`;
   const searchRequest = {
     query: query,
     rewrite_query: true,
-    max_num_results: 30,
+    max_num_results: 12,
     ranking_options: {
-      score_threshold: 0.5,
+      score_threshold: 0.4,
     },
-    filters: {} as {
-      type: string;
-      filters?: {
-        type: string;
-        key: string;
-        value: string;
-      }[];
-      key?: string;
-      value?: string;
+    filters: {
+      type: "and",
+      filters: [
+        {
+          type: "gte",
+          key: "folder",
+          value: `${repoPrefix}`,
+        },
+        {
+          type: "lte",
+          key: "folder",
+          value: `${repoPrefix}~`,
+        },
+      ],
     },
   };
-
-  // Add filters based on R2 listing result
-  if (foldersToSearch.length > 1) {
-    // Success: Apply an array of 'eq' filters for each found folder
-    searchRequest.filters = {
-      type: "or",
-      filters: foldersToSearch.map((folderPath) => ({
-        type: "eq",
-        key: "folder",
-        value: folderPath,
-      })),
-    };
-
-    searchRequest.ranking_options = {
-      score_threshold: 0.4,
-    };
-
-    console.log(
-      `Applying ${searchRequest.filters?.filters?.length} 'eq' filters with listed R2 folders.`,
-    );
-  } else {
-    // Fallback: Apply a single 'gte' filter for the base prefix
-    searchRequest.filters = {
-      type: "gte",
-      key: "folder",
-      value: r2Prefix,
-    };
-    console.log("Applying fallback 'gte' filter due to R2 list error.");
-  }
 
   const answer = await env.AI.autorag(autoragPipeline).search(searchRequest);
 
@@ -536,13 +460,18 @@ export async function searchRepositoryDocumentationAutoRag({
       );
 
       for (const item of filteredData) {
-        const rawGithubUrl = constructGithubUrl(
+        let rawUrl = constructGithubUrl(
           repoData.owner,
           repoData.repo,
           defaultBranch,
           item.filename.replace(`${repoData.owner}/${repoData.repo}/`, ""),
         );
-        responseText += `\n#### (${item.filename})[${rawGithubUrl}] (Score: ${item.score.toFixed(2)})\n`;
+
+        if (item.filename.endsWith(".ipynb.txt")) {
+          rawUrl = `https://pub-39b02ce1b5a441b2a4658c1fc71dbb9c.r2.dev/${repoData.owner}/${repoData.repo}/${item.filename}`;
+        }
+
+        responseText += `\n#### (${item.filename})[${rawUrl}] (Score: ${item.score.toFixed(2)})\n`;
 
         if (item.content && item.content.length > 0) {
           for (const content of item.content) {
@@ -597,110 +526,23 @@ export async function searchRepositoryDocumentationNaive({
 
   console.log(`Searching ${owner}/${repo}`);
 
-  // First, check if this is the initial search for this repo/owner or if reindexing is forced
-  let isFirstSearch = false;
-
   try {
-    // Search for documentation using vector search - pass the Vectorize binding
-    let results = await searchDocumentation(
-      owner,
-      repo,
-      query,
-      5,
-      env.VECTORIZE,
+    // Fetch the documentation - pass env
+    const docResult = await fetchDocumentation({ repoData, env, ctx });
+    const content = docResult.content[0].text;
+    const fileUsed = docResult.fileUsed;
+
+    console.log(
+      `Fetched documentation from ${fileUsed} (${content.length} characters)`,
     );
 
-    console.log(`Initial search found ${results.length} results"`, results);
-
-    // If no results or forceReindex is true, we need to index the documentation
-    if (results.length === 0 || forceReindex) {
-      console.log(
-        `${
-          forceReindex ? "Force reindexing" : "No search results found"
-        } for in ${owner}/${repo}, fetching documentation first`,
-      );
-
-      isFirstSearch = true;
-
-      await cacheIsIndexed(owner, repo, false, env);
-
-      // Fetch the documentation - pass env
-      const docResult = await fetchDocumentation({ repoData, env, ctx });
-      const content = docResult.content[0].text;
-      const fileUsed = docResult.fileUsed;
-
-      console.log(
-        `Fetched documentation from ${fileUsed} (${content.length} characters)`,
-      );
-
-      // Only search if we found content
-      if (content && owner && repo && content !== "No documentation found.") {
-        try {
-          // Search again after indexing - pass the Vectorize binding
-          results = await searchDocumentation(
-            owner,
-            repo,
-            query,
-            5,
-            env.VECTORIZE,
-          );
-          console.log(
-            `Re-search after indexing found ${results.length} results`,
-          );
-
-          // If still no results on first search, send a message about indexing
-          if (results.length === 0 && isFirstSearch) {
-            return {
-              searchQuery: query,
-              content: [
-                {
-                  type: "text" as const,
-                  text:
-                    `### Search Results for: "${query}"\n\n` +
-                    // fallback to content
-                    docResult.content[0].text,
-                },
-              ],
-            };
-          }
-        } catch (error) {
-          console.error(`Error indexing documentation: ${error}`);
-
-          // If there was an indexing error on first search, inform the user
-          if (isFirstSearch) {
-            return {
-              searchQuery: query,
-              content: [
-                {
-                  type: "text" as const,
-                  text:
-                    `### Search Results for: "${query}"\n\n` +
-                    `We encountered an issue while indexing the documentation. ` +
-                    `Please try your search again in a moment.`,
-                },
-              ],
-            };
-          }
-        }
-      }
-    }
-
     // Format search results as text for MCP response, or provide a helpful message if none
-    let formattedText;
-    if (results.length > 0) {
-      formattedText = formatSearchResults(results, query);
-    } else {
-      // Provide more helpful guidance when no results are found
-      formattedText =
-        `### Search Results for: "${query}"\n\n` +
-        `No relevant documentation found for your query. The documentation for this repository has been indexed, ` +
-        `but no sections matched your specific search terms.\n\n` +
-        `Try:\n` +
-        `- Using different keywords\n` +
-        `- Being more specific about what you're looking for\n` +
-        `- Checking for basic information like "What is ${repo}?"\n` +
-        `- Using common terms like "installation", "tutorial", or "example"\n`;
-    }
+    const formattedText =
+      `### Search Results for: "${query}"\n\n` +
+      `No relevant documentation found for your query. It's either being indexed or the search query did not match any documentation.\n\n` +
+      `As a fallback, this is the documentation for ${owner}/${repo}:\n\n` +
+      `${content}\n\n` +
+      `If you'd like to retry the search, try changing the query to increase the likelihood of a match.`;
 
     // Return search results in proper MCP format
     return {
@@ -1148,19 +990,6 @@ export function generateCodeSearchToolDescription({
   repo,
 }: RepoData): string {
   return `Search for code within the GitHub repository: "${owner}/${repo}" using the GitHub Search API (exact match). Returns matching files for you to query further if relevant.`;
-}
-
-const readmeMdLocations: Record<string, `${string}/${string}`> = {
-  "vercel/next.js": "packages/next/README.md",
-};
-
-function getReadmeMDLocationByRepoData(repoData: RepoData): string {
-  if (!repoData.owner || !repoData.repo) {
-    return "README.md";
-  }
-  const readmeLocation =
-    readmeMdLocations[`${repoData.owner}/${repoData.repo}`];
-  return readmeLocation ?? "README.md";
 }
 
 /**

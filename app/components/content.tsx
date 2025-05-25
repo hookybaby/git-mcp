@@ -16,7 +16,36 @@ export default function Content({
 }) {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
 
+  let documentationServerPrefix = "GitMCP";
+  let docsText = owner === "docs" ? "all GitHub docs" : `${owner}/${repo} docs`;
+  let serverName = generateServerName(repo);
+
+  if (owner == "cloudflare" && repo == "docs") {
+    url = "https://docs.mcp.cloudflare.com/sse";
+    documentationServerPrefix = "MCP";
+    docsText = "Cloudflare docs";
+    serverName = "Cloudflare Docs";
+  }
+
   const description: React.ReactNode = (() => {
+    if (owner == "cloudflare" && repo == "docs") {
+      return (
+        <div>
+          <span> for</span>{" "}
+          <strong className="text-blue-500">
+            <a
+              href={`https://developers.cloudflare.com/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:underline"
+            >
+              Cloudflare Documentation
+            </a>
+          </strong>{" "}
+        </div>
+      );
+    }
+
     if (urlType === "subdomain") {
       return (
         <div>
@@ -55,8 +84,6 @@ export default function Content({
     return <div>Documentation MCP</div>;
   })();
 
-  const serverName = generateServerName(repo);
-
   const [copied, setCopied] = useState(false);
 
   const copyUrl = () => {
@@ -80,6 +107,8 @@ export default function Content({
         return "https://cline.bot/assets/icons/favicon-256x256.png";
       case "Highlight AI":
         return "https://highlightai.com/favicon.ico";
+      case "Augment Code":
+        return "https://cdn.prod.website-files.com/66d76c2202b335e39ad2b5e8/66f302d663108ca67c19ddbc_Favicon.png";
       default:
         return "https://codeium.com/favicon.ico";
     }
@@ -108,7 +137,7 @@ export default function Content({
               target="_blank"
               rel="noopener noreferrer"
             >
-              GitMCP Documentation Server
+              {documentationServerPrefix} Documentation Server
             </a>
           </h1>
           <div className="mt-4 text-lg sm:text-xl text-slate-700">
@@ -163,11 +192,7 @@ export default function Content({
                   />
                 </svg>
                 <span className="hidden sm:inline">
-                  New! Chat with{" "}
-                  {owner === "docs"
-                    ? "all GitHub docs"
-                    : `${owner}/${repo} docs`}{" "}
-                  online!
+                  New! Chat with {docsText} online!
                 </span>
                 <span className="sm:hidden">Chat with docs</span>
               </button>
@@ -202,7 +227,7 @@ export default function Content({
 
         <div className="bg-white shadow-lg rounded-lg p-4 sm:p-6 my-8 border border-slate-200">
           <h2 className="text-lg sm:text-xl font-semibold text-blue-800 mb-4">
-            Integration Examples
+            Connect your AI assistant
           </h2>
 
           {/* Tabs for different integrations */}
@@ -215,6 +240,7 @@ export default function Content({
                 "VSCode",
                 "Cline",
                 "Highlight AI",
+                "Augment Code",
               ].map((tab, index) => (
                 <button
                   key={tab}
@@ -451,88 +477,165 @@ export default function Content({
                 </div>
               </div>
             </div>
+
+            <div id="tab-augment-code" className="tab-content hidden">
+              <div className="bg-slate-50 p-3 sm:p-4 rounded-md border border-slate-200">
+                <div className="p-4">
+                  <ul className="text-sm text-slate-700 mb-4 list-disc pl-5 space-y-2">
+                    <li>Open Augment Code settings</li>
+                    <li>Navigate to the MCP section</li>
+                    <li>Add a new MCP server with the following details</li>
+                  </ul>
+
+                  <p className="text-sm text-slate-700 mb-4">
+                    Name the MCP server:{" "}
+                    <code className="bg-slate-200 px-2 py-1 rounded text-blue-700 break-words block my-3">
+                      git-mcp Docs
+                    </code>
+                  </p>
+
+                  <p className="text-sm text-slate-700 mb-4">
+                    Use this command:{" "}
+                    <code className="bg-slate-200 px-2 py-1 rounded text-blue-700 break-words block my-3">
+                      npx mcp-remote ${url}
+                    </code>
+                  </p>
+
+                  <p className="text-sm text-slate-700 mb-4">
+                    Or use the following configuration:{" "}
+                  </p>
+
+                  <CodeExample
+                    code={`{
+  "mcpServers": {
+    "git-mcp Docs": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "${url}"
+      ]
+    }
+  }
+}`}
+                    id="augment-code"
+                    name="Augment Code"
+                  />
+
+                  <p className="text-sm text-slate-700 mt-4">
+                    For more details on configuring MCP servers in Augment Code,
+                    visit{" "}
+                    <a
+                      href="https://docs.augmentcode.com/setup-augment/mcp"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      the Augment Code documentation
+                    </a>
+                    .
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 sm:gap-0 sm:space-x-8">
-          <a
-            href="https://claude.ai"
-            className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              src={getToolFaviconUrl("Claude Desktop")}
-              alt="Claude"
-              className="h-6 w-6 mr-2"
-            />
-            Claude
-          </a>
-          <a
-            href="https://cursor.com"
-            className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              src={getToolFaviconUrl("Cursor")}
-              alt="Cursor"
-              className="h-6 w-6 mr-2"
-            />
-            Cursor
-          </a>
-          <a
-            href="https://codeium.com/windsurf"
-            className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              src={getToolFaviconUrl("Windsurf")}
-              alt="Windsurf"
-              className="h-6 w-6 mr-2"
-            />
-            Windsurf
-          </a>
-          <a
-            href="https://code.visualstudio.com/"
-            className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              src="https://code.visualstudio.com/assets/favicon.ico"
-              alt="VSCode"
-              className="h-6 w-6 mr-2"
-            />
-            VSCode
-          </a>
-          <a
-            href="https://cline.tools"
-            className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              src={getToolFaviconUrl("Cline")}
-              alt="Cline"
-              className="h-6 w-6 mr-2"
-            />
-            Cline
-          </a>
-          <a
-            href="https://highlightai.com"
-            className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              src={getToolFaviconUrl("Highlight AI")}
-              alt="Highlight AI"
-              className="h-6 w-6 mr-2"
-            />
-            Highlight AI
-          </a>
+        <div className="mt-8 flex flex-col items-center justify-center">
+          <div className="flex justify-center space-x-8 mb-6">
+            <a
+              href="https://claude.ai"
+              className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src={getToolFaviconUrl("Claude Desktop")}
+                alt="Claude"
+                className="h-6 w-6 mr-2"
+              />
+              Claude
+            </a>
+            <a
+              href="https://cursor.com"
+              className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src={getToolFaviconUrl("Cursor")}
+                alt="Cursor"
+                className="h-6 w-6 mr-2"
+              />
+              Cursor
+            </a>
+            <a
+              href="https://codeium.com/windsurf"
+              className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src={getToolFaviconUrl("Windsurf")}
+                alt="Windsurf"
+                className="h-6 w-6 mr-2"
+              />
+              Windsurf
+            </a>
+            <a
+              href="https://code.visualstudio.com/"
+              className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="https://code.visualstudio.com/assets/favicon.ico"
+                alt="VSCode"
+                className="h-6 w-6 mr-2"
+              />
+              VSCode
+            </a>
+          </div>
+          <div className="flex justify-center space-x-8">
+            <a
+              href="https://cline.tools"
+              className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src={getToolFaviconUrl("Cline")}
+                alt="Cline"
+                className="h-6 w-6 mr-2"
+              />
+              Cline
+            </a>
+            <a
+              href="https://highlightai.com"
+              className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src={getToolFaviconUrl("Highlight AI")}
+                alt="Highlight AI"
+                className="h-6 w-6 mr-2"
+              />
+              Highlight AI
+            </a>
+            <a
+              href="https://augmentcode.com"
+              className="text-blue-600 hover:text-blue-800 flex items-center transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src={getToolFaviconUrl("Augment Code")}
+                alt="Augment Code"
+                className="h-6 w-6 mr-2"
+              />
+              Augment Code
+            </a>
+          </div>
         </div>
       </div>
     </div>
